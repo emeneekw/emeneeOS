@@ -1,4 +1,5 @@
 import { loadImage, loadText, makePassFBO, makePass } from "./utils.js";
+import { setupCamera, cameraCanvas, cameraAspectRatio } from "../camera.js";
 
 let start;
 const numClicks = 5;
@@ -13,9 +14,22 @@ window.onclick = (e) => {
 	index = (index + 1) % numClicks;
 };
 
-export default ({ regl, config, cameraTex, cameraAspectRatio }, inputs) => {
+export default ({ regl, config }, inputs) => {
 	const output = makePassFBO(regl, config.useHalfFloat);
 	const mirrorPassFrag = loadText("shaders/glsl/mirrorPass.frag.glsl");
+
+	// Initialize camera and texture
+	const cameraSetupPromise = setupCamera();
+
+	// We create the texture with POT canvas (camera.js ensures this)
+	// Initially it is 1x1, but will be resized in the render loop when updated
+	const cameraTex = regl.texture({
+		data: cameraCanvas,
+		min: 'mipmap',
+		mipmap: true,
+		flipY: true
+	});
+
 	const render = regl({
 		frag: regl.prop("frag"),
 		uniforms: {
@@ -25,7 +39,7 @@ export default ({ regl, config, cameraTex, cameraAspectRatio }, inputs) => {
 			cameraTex,
 			clicks: () => clicks,
 			aspectRatio: () => aspectRatio,
-			cameraAspectRatio,
+			cameraAspectRatio: () => cameraAspectRatio,
 		},
 		framebuffer: output,
 	});
@@ -36,11 +50,17 @@ export default ({ regl, config, cameraTex, cameraAspectRatio }, inputs) => {
 		{
 			primary: output,
 		},
-		Promise.all([mirrorPassFrag.loaded]),
+		Promise.all([mirrorPassFrag.loaded, cameraSetupPromise]),
 		(w, h) => {
 			output.resize(w, h);
 			aspectRatio = w / h;
 		},
-		() => render({ frag: mirrorPassFrag.text() })
+		() => {
+			// Update the texture from the canvas each frame
+			// This will also handle resizing if the canvas size changed (e.g. after setupCamera finished)
+			// And because min: 'mipmap' was set, mipmaps will be regenerated.
+			cameraTex(cameraCanvas);
+			render({ frag: mirrorPassFrag.text() });
+		}
 	);
 };
