@@ -2898,7 +2898,20 @@ function Effect(vr, ac, canvas, callback, obj, forceMuted, forcePaused, resizeCa
     bestAttemptFallback();
 
     // TODO: Handle resizing with worker
-    globalThis.updateLandscapeSize = bestAttemptFallback;
+    globalThis.updateLandscapeSize = function()
+    {
+        if( typeof globalThis.demoCanvasRect !== "undefined" )
+        {
+            let devicePixelRatio = globalThis.devicePixelRatio || 1;
+            let xres = Math.round(globalThis.demoCanvasRect.width * devicePixelRatio) | 0;
+            let yres = Math.round(globalThis.demoCanvasRect.height * devicePixelRatio) | 0;
+            iResize(xres, yres);
+        }
+        else
+        {
+            bestAttemptFallback();
+        }
+    };
 
     this.mCreated = true;
 }
